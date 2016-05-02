@@ -11,14 +11,16 @@ entity SERIAL_CALCULATOR is
         NUM_BITS        :natural := 8;                  -- liczba bitow slowa danych (5-8)
         PARITY_BITS     :natural := 1;                  -- liczba bitow parzystosci (0-1)
         STOP_BITS       :natural := 2;                  -- liczba bitow stopu (1-2)
-        MAX_DIGITS      :natural := 3                   -- liczba cyfr dziesietnych
+        MAX_DIGITS      :natural := 3;                  -- liczba cyfr dziesietnych
+        MAX_ARGS        :natural := 5
     );
   
     port (
         R           :in  std_logic;                     -- sygnal resetowania
         C           :in  std_logic;                     -- zegar taktujacy
         RX          :in  std_logic;                     -- odbierany sygnal szeregowy
-        TX          :out std_logic                      -- wysylany sygnal szeregowy
+        TX          :out std_logic;                      -- wysylany sygnal szeregowy
+        DEBUG       :out std_logic
     );
     
 end SERIAL_CALCULATOR;
@@ -33,7 +35,7 @@ architecture behavioural of SERIAL_CALCULATOR is
     signal      tx_send         :std_logic;                                                         -- flaga zadania nadawania
     signal      tx_sending      :std_logic;                                                         -- flaga potwierdzenia nadawania
 
-    type        INSTRUCTION is (ARGUMENT1, ARGUMENT2, CALCULATING, START);                          -- lista instrukcji pracy interpretera
+    type        INSTRUCTION is (ARGUMENT, CALCULATING, START);                          -- lista instrukcji pracy interpretera
     signal      state :INSTRUCTION;                                                                 -- rejestr maszyny stanow interpretera
 
     subtype     DIGIT   is natural range 0 to 9;                                                    -- typ cyfry dziesietnej
@@ -42,10 +44,13 @@ architecture behavioural of SERIAL_CALCULATOR is
     type        OPERATOR    is (PLUS, MINUS);
     signal      operation   :OPERATOR;
     
+    type        ARGUMENTS   is array(natural range <>) of NUMBER(MAX_DIGITS - 1 downto 0);
+    signal      args        :ARGUMENTS(MAX_ARGS - 1 downto 0);
     signal      arg1        :NUMBER(MAX_DIGITS - 1 downto 0);                                       -- liczba argumentu 1
     signal      arg2        :NUMBER(MAX_DIGITS - 1 downto 0);                                       -- liczba argumentu 2
     signal      result      :NUMBER(MAX_DIGITS - 1 downto 0);                                       -- liczba sumy argumentow
     signal      num_digits  :natural range 0 to MAX_DIGITS;                                         -- licznik cyfr argumentu
+    signal      num_args    :natural range 0 to MAX_ARGS;
 
     type        CALCULATION_STATE is (COMPUTING, SENDING, WAITING);                                 -- lista instrukcji wyznaczania wyniku
     signal      calculator_state    :CALCULATION_STATE;                                             -- rejestr maszyny stanow wyznaczania wyniku
@@ -108,7 +113,8 @@ begin
         constant RECV_ERROR         :std_logic_vector := char_code('!');            -- slowo z kodem przypisanym do bledu odbioru
         constant INSTRUCTION_ERROR  :std_logic_vector := char_code('?');            -- slowo z kodem przypisanym do bledu instrukcji
         
-        variable digit_sum :natural range 0 to 19;
+        variable digit_sum  :natural range 0 to 19;
+        variable tmp_result :NUMBER(MAX_DIGITS - 1 downto 0);
 
     begin                                                                           -- poczatek ciala procesu kalkulatora
 
@@ -116,12 +122,15 @@ begin
 
             tx_byte     <= (others => '0');                                         -- wyzerowanie nadawanego slowa danych
             tx_send     <= '0';                                                     -- wyzerowanie flagi zadania nadawania
-            state       <= ARGUMENT1;                                               -- poczatkowy stan pracy interpretera
+            state       <= ARGUMENT;                                               -- poczatkowy stan pracy interpretera
             arg1        <= (others => 0);                                           -- wyzerowanie argumetu 1
             arg2        <= (others => 0);                                           -- wyzerowanie argumetu 2
+            args        <= (others => (others => 0));
             result      <= (others => 0);                                           -- wyzerowanie sumy argumentow
             num_digits  <= 0;                                                       -- wyzerowanie licznika cyfr
+            num_args    <= 0;
             carry_flag  <= 0;                                                       -- wyzerowanie wartosci przeniesienia
+            DEBUG       <= '0';
 
         elsif (rising_edge(C)) then                                                 -- synchroniczna praca kalkulatora
 
@@ -135,55 +144,41 @@ begin
                 tx_send <= '1';                                                     -- ustawienie flagi zadania nadawania przez 'SERIAL_TX'
                 
                 if (rx_byte = char_code(LF) or rx_byte = char_code(CR) or state = START) then           -- zbadanie zadania inicjalizacji
-                    state       <= ARGUMENT1;                                                           -- poczatkowy stan pracy interpretera
+                    state       <= ARGUMENT;                                                           -- poczatkowy stan pracy interpretera
                     arg1        <= (others => 0);                                                       -- wyzerowanie argumetu 1
                     arg2        <= (others => 0);                                                       -- wyzerowanie argumetu 2
+                    args        <= (others => (others => 0));
                     result      <= (others => 0);                                                       -- wyzerowanie sumy argumentow
                     num_digits  <= 0;                                                                   -- wyzerowanie licznika cyfr
+                    num_args    <= 0;
                 else                                                                                    -- interpretacja odebranego slowa
             
-                    case state is                                                                       -- badanie aktualnego stanu maszyny interpretera 
+                    case state is                                                                       -- badanie aktualnego stanu maszyny interpretera
 
-                        when ARGUMENT1 =>                                                               -- obsluga stanu ARGUMENT1
-                        
-                            if (rx_byte = char_code('+')) then                                          -- odebrano znak operatora sumowania
-                                num_digits  <= 0;                                                       -- wyzerowanie licznika cyfr
-                                state       <= ARGUMENT2;                                               -- przejscie do stanu ARGUMENT2
-                            elsif (calculate_digit_value(rx_byte) /= 10) then                           -- odebrano znak cyfry
-                                arg1(0) <= calculate_digit_value(rx_byte);                              -- zapamietanie warosci cyfry w wektorze arg1
-                                arg1(arg1'left downto 1) <= arg1(arg1'left - 1 downto 0);               -- przesuniecie w lewo wektora arg1
+                        when ARGUMENT =>
+                            
+                            if (rx_byte = char_code('=')) then
+                                num_digits  <= 0;
+                                num_args    <= 0;
+                                state       <= CALCULATING;
+                            elsif (rx_byte = char_code('+')) then
+                                num_digits  <= 0;
+                                num_args    <= num_args + 1;
+                            elsif (calculate_digit_value(rx_byte) /= 10 and num_args /= MAX_ARGS) then
+                                args(num_args)(0) <= calculate_digit_value(rx_byte);
+                                args(num_args)(args(num_args)'left downto 1) <= args(num_args)(args(num_args)'left - 1 downto 0);
                                 
-                                if (num_digits /= MAX_DIGITS) then                                      -- badanie liczby odebrsnych cyfr
-                                    num_digits <= num_digits + 1;                                       -- zwiekszenie o 1 liczby odebrsnych cyfr
-                                else                                                                    -- przekroczono liczbe odebranych cyfr
-                                    tx_byte <= INSTRUCTION_ERROR;                                       -- ustawienie slowa nadawania na INSTRUCTION_ERROR
-                                    state   <= START;                                                   -- przejscie awaryjne do stanu START
-                                end if;                                                                 -- zakonczenie instukcji warunkowej
-                            else                                                                        -- odebrano nieprawidlowy znak
-                                tx_byte <= INSTRUCTION_ERROR;                                           -- ustawienie slowa nadawania na INSTRUCTION_ERROR
-                                state   <= START;                                                       -- przejscie awaryjne do stanu START
+                                if (num_digits /= MAX_DIGITS) then
+                                    num_digits <= num_digits + 1;
+                                else
+                                    tx_byte <= INSTRUCTION_ERROR;
+                                    state   <= START;
+                                end if;
+                            else
+                                tx_byte <= INSTRUCTION_ERROR;
+                                state   <= START;
                             end if;
-
-                        when ARGUMENT2 =>                                                               -- obsluga stanu ARGUMENT2
                         
-                            if (rx_byte = char_code('=')) then                                          -- odebrano znak operatora rownosci
-                                num_digits  <= 0;                                                       -- wyzerowanie licznika cyfr
-                                state       <= CALCULATING;                                             -- przejscie do stanu CALCULATING
-                            elsif (calculate_digit_value(rx_byte) /= 10) then                           -- odebrano znak cyfry
-                                arg2(0) <= calculate_digit_value(rx_byte);                              -- zapamietanie warosci cyfry w wektorze arg2
-                                arg2(arg2'left downto 1) <= arg2(arg2'left - 1 downto 0);               -- przesuniecie w lewo wektora arg2
-                                
-                                if (num_digits /= MAX_DIGITS) then                                      -- badanie liczby odebrsnych cyfr
-                                    num_digits <= num_digits + 1;                                       -- zwiekszenie o 1 liczby odebrsnych cyfr
-                                else                                                                    -- przekroczono liczbe odebrsnych cyfr
-                                    tx_byte <= INSTRUCTION_ERROR;                                       -- ustawienie slowa nadawania na INSTRUCTION_ERROR
-                                    state   <= START;                                                   -- przejscie awaryjne do stanu START
-                                end if;                                                                 -- zakonczenie instukcji warunkowej
-                            else                                                                        -- odebrano nieprawidlowy znak
-                                tx_byte <= INSTRUCTION_ERROR;                                           -- ustawienie slowa nadawania na INSTRUCTION_ERROR
-                                state   <= START;                                                       -- przejscie awaryjne do stanu START
-                            end if;
-
                         when others => null;
 
                     end case;
@@ -195,34 +190,42 @@ begin
                 calculator_state    <= COMPUTING;                                                       -- ustawienie poczatkowe stanu COMPUTING
             else                                                                                        -- osiagnieto stan CALCULATING
                 case calculator_state is
-
-                    when COMPUTING =>                                                                   -- obsluga stanu COMPUTING
-                    
-                        digit_sum := arg1(0) + arg2(0) + carry_flag;                                    -- wyznaczenie sumy czastkowej
-                        arg1(arg1'left - 1 downto 0) <= arg1(arg1'left downto 1);                       -- przesuniecie w prawo wektora arg1
-                        arg2(arg2'left - 1 downto 0) <= arg2(arg2'left downto 1);                       -- przesuniecie w prawo wektora arg2
+                
+                    when COMPUTING =>
                         
-                        if (digit_sum < 10) then                                                        -- zbadanie czy nie powstalo przeniesienie
-                            result(0)   <= digit_sum;                                                   -- zapamietanie warosci cyfry w wektorze sumy
-                            carry_flag  <= 0;                                                           -- wyzerowanie wartosci przeniesienia
-                        else                                                                            -- wariant gdy powstalo przeniesienie
-                            result(0)   <= digit_sum - 10;                                              -- zapamietanie warosci cyfry w wektorze sumy
-                            carry_flag  <= 1;                                                           -- ustawienie wartosci przeniesienia
-                        end if;                                                                         -- zakonczenie instukcji warunkowej
-                        
-                        result(result'left downto 1) <= result(result'left - 1 downto 0);               -- przesuniecie w lewo wektora sumy
-                        
-                        if (num_digits /= MAX_DIGITS - 1) then                                          -- badanie czy pozostaly cyfry do sunowania
-                            num_digits <= num_digits + 1;                                               -- zwiekszenie o 1 liczby zsumowanych cyfr
-                        else                                                                            -- wykonano sumowanie czastkowe wszystkich cyfr
-                            num_digits          <= 0;                                                   -- wyzerowanie licznika cyfr
-                            carry_flag          <= 0;                                                   -- wyzerowanie wartosci przeniesienia
-                            calculator_state    <= SENDING;                                             -- przejscie do stanu SENDING
+                        if (num_args = MAX_ARGS) then
+                            num_digits          <= 0;
+                            num_args            <= 0;
+                            carry_flag          <= 0;
+                            calculator_state    <= SENDING;
                             
-                            if (tx_sending='1') then                                                    -- badanie czy 'SERIAL_TX' jest zajety
+                            if (tx_sending = '1') then
                                 calculator_state <= WAITING;
                             end if;
-                            
+                        else
+                            if (num_digits = MAX_DIGITS) then
+                                num_digits  <= 0;
+                                carry_flag  <= 0;
+                                result      <= tmp_result;
+                                num_args    <= num_args + 1;
+                            else
+                                digit_sum := result(0) + args(num_args)(0) + carry_flag;
+                                result(result'left - 1 downto 0) <= result(result'left downto 1);
+                                args(num_args)(args(num_args)'left - 1 downto 0) <= args(num_args)(args(num_args)'left downto 1);
+                                
+                                --tmp_result(tmp_result'left downto 1) := tmp_result(tmp_result'left - 1 downto 0);
+                                tmp_result(tmp_result'left - 1 downto 0) := tmp_result(tmp_result'left downto 1);
+                                
+                                if (digit_sum < 10) then
+                                    tmp_result(MAX_DIGITS - 1)   := digit_sum;
+                                    carry_flag      <= 0;
+                                else
+                                    tmp_result(MAX_DIGITS - 1)   := digit_sum - 10;
+                                    carry_flag      <= 1;
+                                end if;
+                                
+                                num_digits <= num_digits + 1;
+                            end if;
                         end if;
 
                     when SENDING =>
@@ -230,8 +233,8 @@ begin
                         if (num_digits /= MAX_DIGITS) then                                              -- badanie czy pozostaly cyfry do wyslania
                             num_digits <= num_digits + 1;                                               -- zwiekszenie o 1 liczby wyslanych cyfr
                             
-                            if (carry_flag = 1 or result(0) /= 0 or num_digits = MAX_DIGITS - 1) then   -- badanie czy nlezy wyslac cyfre 
-                                tx_byte             <= ZERO_BYTE + character'pos('0') + result(0);      -- wyznaczenie i ustawienie kodu wysylanej cyfry
+                            if (carry_flag = 1 or result(MAX_DIGITS - 1) /= 0 or num_digits = MAX_DIGITS - 1) then   -- badanie czy nlezy wyslac cyfre 
+                                tx_byte             <= ZERO_BYTE + character'pos('0') + result(MAX_DIGITS - 1);      -- wyznaczenie i ustawienie kodu wysylanej cyfry
                                 tx_send             <= '1';                                             -- ustawienie flagi zadania nadawania przez 'SERIAL_TX'
                                 carry_flag          <= 1;                                               -- ustawienie flagi przeniesienia jako znacznika wysylania
                                 calculator_state    <= WAITING;                                         -- przejscie do stanu WAITING
@@ -241,7 +244,8 @@ begin
                             state               <= START;                                               -- przejscie do stanu START interpretera
                         end if;
                         
-                        result(result'left - 1 downto 0) <= result(result'left downto 1);               -- przesuniecie w prawo wektora sumy
+                        --result(result'left - 1 downto 0) <= result(result'left downto 1);               -- przesuniecie w prawo wektora sumy
+                        result(result'left downto 1) <= result(result'left - 1 downto 0);
 
                     when WAITING =>
                     
