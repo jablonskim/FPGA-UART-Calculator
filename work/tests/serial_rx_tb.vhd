@@ -20,15 +20,18 @@ architecture behavioural of SERIAL_RX_TB is
     signal   R          :std_logic;
     signal   C          :std_logic;
     signal   RX         :std_logic;
+    signal   RX_R       :std_logic;
     signal   BYTE       :std_logic_vector(NUM_BITS - 1 downto 0);
     signal   READY      :std_logic;
     signal   ERROR      :std_logic;
   
-    constant T   :time := 1 sec / F;
-    constant BIT_T     :time := 1 sec / BAUD_RATE;
+    constant T          :time := 1 sec / F;
+    constant BIT_T      :time := 1 sec / BAUD_RATE;
     signal   D          :std_logic_vector(BYTE'range);
   
 begin
+
+    RX <= not RX_R;
 
     process is
     begin
@@ -40,29 +43,29 @@ begin
   
     process is
     begin
-        R  <= '1';
-        RX <= '0';
-        D  <= (others => '0');
+        R       <= '1';
+        RX_R    <= '0';
+        D       <= (others => '0');
         wait for 10 ns;
-        R  <= '0';
+        R       <= '0';
         wait for 10 ns;
         
         loop
-            RX <= '1';
+            RX_R <= '1';
             wait for BIT_T;
             
             for i in 0 to NUM_BITS - 1 loop
-                RX <= D(i);
+                RX_R <= D(i);
                 wait for BIT_T;
             end loop;
             
             if (PARITY_BITS = 1) then
-                RX <= XOR_REDUCE(D);
+                RX_R <= XOR_REDUCE(D);
                 wait for BIT_T;
             end if;
             
             for i in 0 to STOP_BITS - 1 loop
-                RX <= '0';
+                RX_R <= '0';
                 wait for BIT_T;
             end loop;
             

@@ -15,18 +15,21 @@ end SERIAL_TX_TB;
 
 architecture behavioural of SERIAL_TX_TB is
 
-    signal   R        :std_logic;
-    signal   C        :std_logic;
-    signal   TX       :std_logic;
-    signal   BYTE     :std_logic_vector(NUM_BITS - 1 downto 0);
-    signal   SEND     :std_logic;
-    signal   SENDING  :std_logic;
+    signal   R          :std_logic;
+    signal   C          :std_logic;
+    signal   TX         :std_logic;
+    signal   TX_R       :std_logic;
+    signal   BYTE       :std_logic_vector(NUM_BITS - 1 downto 0);
+    signal   SEND       :std_logic;
+    signal   SENDING    :std_logic;
 
-    signal   RECEIVED :std_logic_vector(NUM_BITS - 1 downto 0);
+    signal   RECEIVED   :std_logic_vector(NUM_BITS - 1 downto 0);
 
-    constant T        :time := 1 sec / F;
+    constant T          :time := 1 sec / F;
 
 begin
+
+    TX_R <= not TX;
 
     process is
     begin
@@ -91,10 +94,10 @@ begin
         
         loop
             blad := FALSE;
-            wait until TX = '1';
+            wait until TX_R = '1';
             wait for O_BITU / 2;
             
-            if (TX /= '1') then
+            if (TX_R /= '1') then
                 blad := TRUE;
             end if;
             
@@ -102,12 +105,12 @@ begin
             
             for i in 0 to NUM_BITS - 1 loop
                 RECEIVED(RECEIVED'left - 1 downto 0) <= RECEIVED(RECEIVED'left downto 1);
-                RECEIVED(RECEIVED'left) <= TX;
+                RECEIVED(RECEIVED'left) <= TX_R;
                 wait for O_BITU;
             end loop;
             
             if (PARITY_BITS = 1) then
-                if (TX /= XOR_REDUCE(BYTE)) then
+                if (TX_R /= XOR_REDUCE(BYTE)) then
                     blad := TRUE;
                 end if;
                 
@@ -115,7 +118,7 @@ begin
             end if;
             
             for i in 0 to STOP_BITS - 1 loop
-                if (TX /= '0') then
+                if (TX_R /= '0') then
                     blad := TRUE;
                 end if;
             end loop;

@@ -59,7 +59,7 @@ begin
 
             READY       <= '0';                                         -- defaultowe skasowanie flagi potwierdzenia odbioru
             ERROR       <= '0';                                         -- defaultowe skasowanie flagi wykrycia bledu w odbiorze
-            input(0)    <= RX;                                          -- zarejestrowanie synchroniczne stanu sygnalu RX
+            input(0)    <= not RX;                                      -- zarejestrowanie synchroniczne stanu sygnalu RX
             input(1)    <= input(0);                                    -- zarejestrowanie dwoch kolejnych stanow sygnalu RX
 
             case state is                                               -- badanie aktualnego stanu maszyny stanow 

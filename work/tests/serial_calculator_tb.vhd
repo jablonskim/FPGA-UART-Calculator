@@ -23,7 +23,9 @@ architecture behavioural of SERIAL_CALCULATOR_TB is
     signal   R          :std_logic;
     signal   C          :std_logic;
     signal   RX         :std_logic;
+    signal   RX_R       :std_logic;
     signal   TX         :std_logic;
+    signal   TX_R       :std_logic;
   
     constant T          :time := 1 sec / F;
     constant BIT_T      :time := 1 sec / BAUD_RATE;
@@ -32,6 +34,9 @@ architecture behavioural of SERIAL_CALCULATOR_TB is
     signal   RESULT     :string(REQUEST'length + MAX_DIGITS downto 1);
  
 begin
+
+    RX      <= not RX_R;
+    TX_R    <= not TX;
 
     process is
     begin
@@ -45,7 +50,7 @@ begin
         variable BYTE :std_logic_vector(NUM_BITS - 1 downto 0);
     begin
         R       <= '1';
-        RX      <= '0';
+        RX_R    <= '0';
         BYTE    := (others => '0');
         
         wait for 10 ns;
@@ -55,21 +60,21 @@ begin
         for i in 1 to REQUEST'length loop
             wait for 10 * BIT_T;
             BYTE    := CONV_STD_LOGIC_VECTOR(character'pos(REQUEST(i)), BYTE'length);
-            RX      <= '1';
+            RX_R    <= '1';
             wait for BIT_T;
       
             for i in 0 to NUM_BITS - 1 loop
-                RX <= BYTE(i);
+                RX_R <= BYTE(i);
                 wait for BIT_T;
             end loop;
             
             if (PARITY_BITS = 1) then
-                RX <= XOR_REDUCE(BYTE);
+                RX_R <= XOR_REDUCE(BYTE);
                 wait for BIT_T;
             end if;
             
             for i in 0 to STOP_BITS - 1 loop
-                RX <= '0';
+                RX_R <= '0';
                 wait for BIT_T;
             end loop;
         end loop;
@@ -104,10 +109,10 @@ begin
         loop
             error := FALSE;
             
-            wait until TX = '1';
+            wait until TX_R = '1';
             wait for BIT_T / 2;
             
-            if (TX /= '1') then
+            if (TX_R /= '1') then
                 error := TRUE;
             end if;
             
@@ -115,12 +120,12 @@ begin
       
             for i in 0 to NUM_BITS - 1 loop
                 BYTE(BYTE'left - 1 downto 0)    := BYTE(BYTE'left downto 1);
-                BYTE(BYTE'left)                 := TX;
+                BYTE(BYTE'left)                 := TX_R;
                 wait for BIT_T;
             end loop;
       
             if (PARITY_BITS = 1) then
-                if (TX /= XOR_REDUCE(BYTE)) then
+                if (TX_R /= XOR_REDUCE(BYTE)) then
                     error := TRUE;
                 end if;
                 
@@ -128,7 +133,7 @@ begin
             end if;
         
             for i in 0 to STOP_BITS - 1 loop
-                if (TX /= '0') then
+                if (TX_R /= '0') then
                     error := TRUE;
                 end if;
             end loop;
