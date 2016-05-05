@@ -19,8 +19,7 @@ entity SERIAL_CALCULATOR is
         R           :in  std_logic;                     -- sygnal resetowania
         C           :in  std_logic;                     -- zegar taktujacy
         RX          :in  std_logic;                     -- odbierany sygnal szeregowy
-        TX          :out std_logic;                      -- wysylany sygnal szeregowy
-        DEBUG       :out std_logic
+        TX          :out std_logic                      -- wysylany sygnal szeregowy
     );
     
 end SERIAL_CALCULATOR;
@@ -151,7 +150,6 @@ begin
             num_digits      <= 0;                                                       -- wyzerowanie licznika cyfr
             num_args        <= 0;
             carry_flag      <= 0;                                                       -- wyzerowanie wartosci przeniesienia
-            DEBUG           <= '0';
             is_prev_digit   <= '0';
 
         elsif (rising_edge(C)) then                                                 -- synchroniczna praca kalkulatora
@@ -214,7 +212,7 @@ begin
                                 end if;
                                 
                                 is_prev_digit <= '1';
-                            else
+                            elsif (rx_byte /= char_code(' ')) then
                                 tx_byte <= INSTRUCTION_ERROR;
                                 state   <= START;
                             end if;
