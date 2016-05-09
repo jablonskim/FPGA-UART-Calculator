@@ -138,7 +138,7 @@ begin
 
     begin
 
-        if (R = '1') then                                                           -- asynchroniczna inicjalizacja rejestrow
+        if (R = '0') then                                                           -- asynchroniczna inicjalizacja rejestrow
 
             tx_byte         <= (others => '0');
             tx_send         <= '0';

@@ -43,7 +43,7 @@ begin
     process (R, C) is                                                   -- proces odbiornika
     begin                                                               -- cialo procesu odbiornika
 
-        if (R = '1') then                                               -- asynchroniczna inicjalizacja rejestrow
+        if (R = '0') then                                               -- asynchroniczna inicjalizacja rejestrow
         
             input       <= (others => '0');                             -- wyzerowanie rejestru sygnalu RX
             state       <= WAITING;                                     -- poczatkowy stan pracy odbiornika
@@ -119,7 +119,7 @@ begin
                         time_cnt <= 0;                                  -- wyzerowanie licznika czasu bodu
                         state    <= STOP;                               -- przejscie do stanu STOP
                         
-                        if ((input(1) xor XOR_REDUCE(byte_buff)) = '1') then    -- badanie nieprawidlowej parzystosci bitow
+                        if ((input(1) xor XOR_REDUCE(not byte_buff)) = '1') then    -- badanie nieprawidlowej parzystosci bitow
                             problem <= '1';                             -- ustawienie rejestru bledu odbioru
                         end if;                                         -- zakonczenie instukcji warunkowej 
                     end if;                                             -- zakonczenie instukcji warunkowej
@@ -139,7 +139,7 @@ begin
                             end if;                                     -- zakonczenie instukcji warunkowej 
                         else                                            -- zakonczenie odliczania bitow stopu
                             if (problem = '0' and input(1) = '0') then  -- badanie prawidlowego odbioru szeregowego
-                                BYTE    <= byte_buff;                   -- ustawienie na wyjsciu BYTE odebranego slowa 
+                                BYTE    <= not byte_buff;               -- ustawienie na wyjsciu BYTE odebranego slowa 
                                 READY   <= '1';                         -- ustawienie na wyjsciu flagi potwierdzenia
                             else                                        -- wykryto nieprawidlowy odbioru szeregowy
                                 BYTE    <= (others => '0');             -- wyzerowanie wyjscia danych

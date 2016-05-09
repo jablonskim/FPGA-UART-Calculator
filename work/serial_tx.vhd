@@ -26,7 +26,6 @@ end SERIAL_TX;
 
 architecture behavioural of SERIAL_TX is
 
-    signal   TX_R           : std_logic;                                -- odwrotny TX
     signal   byte_buff      :std_logic_vector(BYTE'range);              -- rejestr kolejno odebranych bitow danych
     signal   parity_flag    :std_logic;                                 -- flaga parzystosci
 
@@ -39,20 +38,18 @@ architecture behavioural of SERIAL_TX is
 
 begin
 
-    TX <= not TX_R;
-
     process (R, C) is                                                   -- proces odbiornika
     begin
 
-        if (R = '1') then                                               -- asynchroniczna inicjalizacja rejestrow
+        if (R = '0') then                                               -- asynchroniczna inicjalizacja rejestrow
      
             state       <= WAITING;                                     -- poczatkowy stan pracy odbiornika
-            TX_R        <= '0';                                         -- wyzerowanie sygnalu nadawania szeregowego
+            TX          <= '1';                                         -- wyzerowanie sygnalu nadawania szeregowego
             SENDING     <= '0';                                         -- wyzerowanie flagi potwierdzenia nadania
 
         elsif (rising_edge(C)) then                                     -- synchroniczna praca nadajnika
 
-            TX_R        <= '0';                                         -- defaultowe ustawienie sygnalu nadawania szeregowego
+            TX          <= '1';                                         -- defaultowe ustawienie sygnalu nadawania szeregowego
             SENDING     <= '1';                                         -- defaultowe ustawienie flagi potwierdzenia wysylania
 
             case state is                                               -- badanie aktualnego stanu maszyny stanow 
@@ -71,7 +68,7 @@ begin
 
                 when START =>                                           -- obsluga stanu START
                 
-                    TX_R <= '1';                                        -- wysylanie bitu STRAT
+                    TX <= '0';                                          -- wysylanie bitu STRAT
                     
                     if (time_cnt /= T - 1) then                         -- badanie odliczania okresu T
                         time_cnt <= time_cnt + 1;                       -- zwiekszenie o 1 stanu licznika czasu
@@ -82,7 +79,7 @@ begin
                     end if;                                             -- zakonczenie instukcji warunkowej
 
                 when DATA =>                                            -- obsluga stanu DATA
-                    TX_R <= byte_buff(0);                               -- wysylanie najmlodszego bitu danych bufora
+                    TX <= byte_buff(0);                                 -- wysylanie najmlodszego bitu danych bufora
                     
                     if (time_cnt /= T - 1) then                         -- badanie odliczania okresu T
                         time_cnt <= time_cnt + 1;                       -- zwiekszenie o 1 stanu licznika czasu
@@ -107,7 +104,7 @@ begin
                     end if;                                             -- zakonczenie instukcji warunkowej
 
                 when PARITY =>                                          -- obsluga stanu PARITY
-                    TX_R <= parity_flag;                                -- wysylanie bitu parzystosci
+                    TX <= parity_flag;                                  -- wysylanie bitu parzystosci
                     
                     if (time_cnt /= T - 1) then                         -- badanie odliczania okresu T
                         time_cnt <= time_cnt + 1;                       -- zwiekszenie o 1 stanu licznika czasu

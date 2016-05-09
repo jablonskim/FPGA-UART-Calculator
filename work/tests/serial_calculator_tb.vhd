@@ -8,7 +8,7 @@ entity SERIAL_CALCULATOR_TB is
 
     generic (
         F               :natural := 20_000_000;         -- czestotliwosc zegata w [Hz]
-        BAUD_RATE       :natural := 2_000_000;          -- predkosc nadawania w [bodach]
+        BAUD_RATE       :natural := 9600;               -- predkosc nadawania w [bodach]
         NUM_BITS        :natural := 8;                  -- liczba bitow slowa danych (5-8)
         PARITY_BITS     :natural := 1;                  -- liczba bitow parzystosci (0-1)
         STOP_BITS       :natural := 2;                  -- liczba bitow stopu (1-2)
@@ -49,13 +49,13 @@ begin
     process is
         variable BYTE :std_logic_vector(NUM_BITS - 1 downto 0);
     begin
-        R       <= '1';
+        R       <= '0';
         RX_R    <= '0';
         BYTE    := (others => '0');
         
         wait for 10 ns;
         
-        R       <= '0';
+        R       <= '1';
     
         for i in 1 to REQUEST'length loop
             wait for 10 * BIT_T;
@@ -64,12 +64,12 @@ begin
             wait for BIT_T;
       
             for i in 0 to NUM_BITS - 1 loop
-                RX_R <= BYTE(i);
+                RX_R <= not BYTE(i);
                 wait for BIT_T;
             end loop;
             
             if (PARITY_BITS = 1) then
-                RX_R <= XOR_REDUCE(BYTE);
+                RX_R <= XOR_REDUCE(not BYTE);
                 wait for BIT_T;
             end if;
             
@@ -120,12 +120,12 @@ begin
       
             for i in 0 to NUM_BITS - 1 loop
                 BYTE(BYTE'left - 1 downto 0)    := BYTE(BYTE'left downto 1);
-                BYTE(BYTE'left)                 := TX_R;
+                BYTE(BYTE'left)                 := not TX_R;
                 wait for BIT_T;
             end loop;
       
             if (PARITY_BITS = 1) then
-                if (TX_R /= XOR_REDUCE(BYTE)) then
+                if (not TX_R /= XOR_REDUCE(BYTE)) then
                     error := TRUE;
                 end if;
                 
